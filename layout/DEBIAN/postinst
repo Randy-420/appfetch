@@ -1,0 +1,13 @@
+#! /bin/bash
+location="/usr/bin/"
+
+echo "Setting File Permissions..."
+chown 0:0 "${location}appfetch" -cv
+chmod 06755 "${location}appfetch" -cv
+
+echo "File Permissions Set"
+
+echo -e "\n                     .                          \n                     M                          \n                    dM                          \n                    MMr                         \n                   4MMML                  .     \n                   MMMMM.                xf     \n   .              \"MMMMM               .MM-     \n    Mh..          +MMMMMM            .MMMM      \n    .MMM.         .MMMMML.          MMMMMh      \n     )MMMh.        MMMMMM         MMMMMMM       \n      3MMMMx.     \'MMMMMMf      xnMMMMMM\"       \n      \'*MMMMM      MMMMMM.     nMMMMMMP\"        \n        *MMMMMx    \"MMMMM\\    .MMMMMMM=         \n         *MMMMMh   \"MMMMM\"   JMMMMMMP           \n           MMMMMM   3MMMM.  dMMMMMM            .\n            MMMMMM  \"MMMM  .MMMMM(        .nnMP\"\n=..          *MMMMx  MMM\"  dMMMM\"    .nnMMMMM*  \n  \"MMn...     \'MMMMr \'MM   MMM\"   .nMMMMMMM*\"   \n   \"4MMMMnn..   *MMM  MM  MMP\"  .dMMMMMMM\"\"     \n     ^MMMMMMMMx.  *ML \"M .M*  .MMMMMM**\"        \n        *PMMMMMMhn. *x > M  .MMMM**\"\"           \n           \"\"**MMMMhx/.h/ .=*\"                  \n                    .3P\"%....\n\n"
+
+echo "Done!"
+exit 0
