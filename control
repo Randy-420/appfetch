@@ -1,7 +1,7 @@
 Package: com.turann.randy420.appfetch
 Name: appfetch
 Architecture: iphoneos-arm
-Description: 
+Description: nscake+
 Depiction: https://Randy-420.GitHub.io/depic/appfetch.html
 Depends: curl, jq, wget
 Homepage: https://theemeraldisle.family
@@ -9,4 +9,4 @@ Maintainer: Turann and Randy420 <randy.skinner@hotmail.com>
 Author: Turann and Randy420 <randy.skinner@hotmail.com>
 Section: System
 Tag: role::hacker
-Version: 0.0
+Version: 0.1
