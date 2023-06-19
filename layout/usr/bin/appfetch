@@ -7,9 +7,8 @@
 # to-do ask download and install or download only
 # to-do make more colorful, error handling with descriptions
 
-ver="0.0.1"
+ver="0.0.2"
 
-# This loop will only ever run once. Bad quoting or missing glob/expansion? shellcheck SC2043 
 function ketik() {
 	for ASU in "$1"$'\n'; do
 		echo -e "$ASU"
@@ -17,18 +16,24 @@ function ketik() {
 	done
 }
 
-function installOption() {
-	toCheck="${1}"
-	result=$(uicache --list ${toCheck})
-	if [[ $result =~ "Invalid appID provided:" ]]; then
-		echo "before: \"${result}\""
-		unset result
-		echo "after: \"${result}\""
+function downloadApp() {
+	local url="$1"
+	local outDir="$2"
+	local appName="$3"
+
+	if [[ ! -d ${outDir} ]]; then
+		mkdir -p ${outDir}
 	fi
-	echo $result
+
+	wget --show-progress "${url}" -O "${outDir}${appName}.ipa"
+
+	if [[ -f "${outDir}${appName}.ipa" ]]; then
+		ketik "${appName} successfully downloaded to ${outDir}"
+	else
+		ketik "Failed to download ${appName}"
+	fi
 }
 
-# Function to print text with delay
 clear
 ketik "AppFetch $ver"
 
@@ -40,10 +45,12 @@ do
 1) iPhoneCake
 2) ++ App
 " download_location
+
 	if [[ $download_location -lt 1 || $download_location -gt 2 ]]; then
 		ketik "Invalid Selection!"
 		continue
 	fi
+
 	if [ $download_location -eq 1 ]; then
 		HOST="apiv2.iphonecake.com"
 		url="https://apiv2.iphonecake.com/appcake/appcake_api/spv6/appsearch_r.php?device=1&q=${app_name}&p=0"
@@ -51,6 +58,7 @@ do
 		HOST="api.ipahub.com"
 		url="https://api.ipahub.com/search_tweaks.php?key=${app_name}"
 	fi
+
 	break
 done
 
@@ -76,17 +84,13 @@ for (( i=0; i<app_count; i++ )); do
 	app_name=$(echo "${response}" | jq -r ".list[$i].name")
 	app_version=$(echo "${response}" | jq -r ".list[$i].ver")
 	app_id=$(echo "${response}" | jq -r ".list[$i].id")
-	#The loop we needed but, not wanted.
-	hyphens=""
-	for (( j=1; j<=${#app_name}+${#app_version}+2; j++ )); do
-		hyphens="${hyphens}-"
-	done
+	hyphens=$(printf -- '-%.s' $(seq 1 $(( ${#app_name} + ${#app_version} + 2 ))))
 
 	ketik "\n\n\t-- App Number: $((i+1)) --"
 	ketik "Application name: ${app_name}"
 	ketik "Application Version: v${app_version}"
 	ketik "Application ID: ${app_id}"
-	ketik "$hyphens" # Replace seq and bc.
+	ketik "$hyphens"
 done
 
 while :
@@ -102,10 +106,11 @@ do
 		ketik "Invalid input. Please enter a number between 1 and $app_count."
 		continue
 	fi
+
 	break
 done
 
-app_number=$app_number-1
+app_number=$((app_number-1))
 app_name=$(echo "${response}" | jq -r ".list[${app_number}].name")
 app_version=$(echo "${response}" | jq -r ".list[${app_number}].ver")
 app_id=$(echo "${response}" | jq -r ".list[${app_number}].id")
@@ -116,41 +121,5 @@ else
 	url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=2&id=${app_id}"
 fi
 
-payload=""
-headers=(
-	"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
-	"User-Agent: appcakej/7.2.2 (iPhone; iOS 14.8; Scale/3.00)"
-	"Connection: close"
-	"Host: ${HOST}"
-	"Accept-Encoding: gzip, deflate"
-	"Cache-Control: max-age=0"
-)
-
-response=$(curl -s -X GET -H "${headers[@]}" -d "${payload}" "${url}")
-#app_link=$(echo "${response}" | jq -r) #Thanks for the base whoever you created this script. I just modified it a bit.
-download_lmk=$(echo "${response}" | jq -r '.link' | tr -d '"' | sed 's/^[[:space:]]*//') #Remove useless spaces and quotes, get the direct download link.
 outDir="/var/mobile/appFetch/"
-if [[ ! -d ${outDir} ]]; then
-	mkdir -p ${outDir}
-fi
-echo "$download_lmk"
-wget --show-progress "${download_lmk}" -O "${outDir}${app_name}.ipa"
-
-if [[ -f "${outDir}${app_name}.ipa" ]]; then
-	ketik "${app_name} successfully downloaded to ${outDir}"
-
-#	installOption "com.opa334.TrollStore"
-#	trollStore=${result}
-#	installOption "xyz.yyyue.esign"
-#	esign=${result}
-#	installOption "com.DebianArch.ScarletPersonalXYZ"
-#	scarlet=${result}
-#	installOption "com.DebianArch.ScarletPersonal"
-#	scarlet1=${result}
-#	installOption ""
-#	altStore=${result}
-
-#	read -p "Would you li: " app_number
-else
-	echo "Failed to download ${app_name}"
-fi
+downloadApp "$url" "$outDir" "$app_name"
