@@ -1,64 +1,98 @@
 #!/bin/bash
-# Turann & Randy420
+# AppFetch - Turann & Randy420
 
-# Requires curl jq wget Check for them installed another thing to-do
+ver="0.0.1"
 
-# to-do install ipa using something i didnt throught of yet.
-# to-do ask download and install or download only
-# to-do make more colorful, error handling with descriptions
-
-ver="0.0.2"
-
-function ketik() {
-	for ASU in "$1"$'\n'; do
-		echo -e "$ASU"
+print_message() {
+	for message in "$@"; do
+		echo -e "$message"
 		sleep 0.05
 	done
 }
 
-function downloadApp() {
-	local url="$1"
-	local outDir="$2"
-	local appName="$3"
+check_invalid_appID() {
+	toCheck="${1}"
+	result=$(uicache --list "${toCheck}")
+	if [[ $result =~ "Invalid appID provided:" ]]; then
+		unset result
+	fi
+	echo "$result"
+}
+
+search_app() {
+	app_name="${1}"
+	if [ "$download_location" -eq 1 ]; then
+		url="https://apiv2.iphonecake.com/appcake/appcake_api/spv6/appsearch_r.php?device=1&q=${app_name}&p=0"
+	else
+		url="https://api.ipahub.com/search_tweaks.php?key=${app_name}"
+	fi
+	response=$(curl -s -X POST -H "${headers[@]}" -d "${payload}" "${url}")
+	app_count=$(echo "${response}" | jq -r '.list | length')
+
+	if [[ $app_count -eq 0 ]]; then
+		print_message "Application not found"
+		exit
+	fi
+
+	for (( i=0; i<app_count; i++ )); do
+		app_name=$(echo "${response}" | jq -r ".list[$i].name")
+		app_version=$(echo "${response}" | jq -r ".list[$i].ver")
+		app_id=$(echo "${response}" | jq -r ".list[$i].id")
+		hyphens=$(printf '%*s' "$((${#app_name}+${#app_version}+2))" | tr ' ' '-')
+		
+		print_message "\n\n\t-- App Number: $((i+1)) --"
+		print_message "Application name: ${app_name}"
+		print_message "Application Version: v${app_version}"
+		print_message "Application ID: ${app_id}"
+		print_message "$hyphens"
+	done
+}
+
+download_app() {
+	app_number="${1}"
+	app_name=$(echo "${response}" | jq -r ".list[${app_number}].name")
+	app_version=$(echo "${response}" | jq -r ".list[${app_number}].ver")
+	app_id=$(echo "${response}" | jq -r ".list[${app_number}].id")
+
+	if [ "$download_location" -eq 1 ]; then
+		url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=1&id=${app_id}"
+	else
+		url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=2&id=${app_id}"
+	fi
+
+	response=$(curl -s -X GET -H "${headers[@]}" -d "${payload}" "${url}")
+	download_lmk=$(echo "${response}" | jq -r '.link' | tr -d '"' | sed 's/^[[:space:]]*//')
+	outDir="/var/mobile/appFetch/"
 
 	if [[ ! -d ${outDir} ]]; then
 		mkdir -p ${outDir}
 	fi
 
-	wget --show-progress "${url}" -O "${outDir}${appName}.ipa"
+	echo "$download_lmk"
+	wget --show-progress "${download_lmk}" -O "${outDir}${app_name}.ipa"
 
-	if [[ -f "${outDir}${appName}.ipa" ]]; then
-		ketik "${appName} successfully downloaded to ${outDir}"
+	if [[ -f "${outDir}${app_name}.ipa" ]]; then
+		print_message "${app_name} successfully downloaded to ${outDir}"
 	else
-		ketik "Failed to download ${appName}"
+		echo "Failed to download ${app_name}"
 	fi
 }
 
 clear
-ketik "AppFetch $ver"
+print_message "AppFetch $ver"
 
 read -rp "Enter the name of the app to search: " app_name
 
 while :
 do
 	read -rp "Which type of IPA would you like to download?
-1) iPhoneCake
-2) ++ App
-" download_location
-
+	1) iPhoneCake
+	2) ++ App
+	" download_location
 	if [[ $download_location -lt 1 || $download_location -gt 2 ]]; then
-		ketik "Invalid Selection!"
+		print_message "Invalid Selection!"
 		continue
 	fi
-
-	if [ $download_location -eq 1 ]; then
-		HOST="apiv2.iphonecake.com"
-		url="https://apiv2.iphonecake.com/appcake/appcake_api/spv6/appsearch_r.php?device=1&q=${app_name}&p=0"
-	else
-		HOST="api.ipahub.com"
-		url="https://api.ipahub.com/search_tweaks.php?key=${app_name}"
-	fi
-
 	break
 done
 
@@ -72,54 +106,23 @@ headers=(
 	"Cache-Control: max-age=0"
 )
 
-response=$(curl -s -X POST -H "${headers[@]}" -d "${payload}" "${url}")
-app_count=$(echo "${response}" | jq -r '.list | length')
-
-if [[ $app_count -eq 0 ]]; then
-	ketik "Application not found"
-	exit
-fi
-
-for (( i=0; i<app_count; i++ )); do
-	app_name=$(echo "${response}" | jq -r ".list[$i].name")
-	app_version=$(echo "${response}" | jq -r ".list[$i].ver")
-	app_id=$(echo "${response}" | jq -r ".list[$i].id")
-	hyphens=$(printf -- '-%.s' $(seq 1 $(( ${#app_name} + ${#app_version} + 2 ))))
-
-	ketik "\n\n\t-- App Number: $((i+1)) --"
-	ketik "Application name: ${app_name}"
-	ketik "Application Version: v${app_version}"
-	ketik "Application ID: ${app_id}"
-	ketik "$hyphens"
-done
+search_app "$app_name"
 
 while :
 do
 	read -p "Enter the number of the app you want to download: " app_number
 
 	if ! [[ "$app_number" =~ ^[0-9]+$ ]]; then
-		ketik "Invalid input. Please enter a number."
+		print_message "Invalid input. Please enter a number."
 		continue
 	fi
 
 	if [ "$app_number" -lt 1 ] || [ "$app_number" -gt "$app_count" ]; then
-		ketik "Invalid input. Please enter a number between 1 and $app_count."
+		print_message "Invalid input. Please enter a number between 1 and $app_count."
 		continue
 	fi
-
 	break
 done
 
 app_number=$((app_number-1))
-app_name=$(echo "${response}" | jq -r ".list[${app_number}].name")
-app_version=$(echo "${response}" | jq -r ".list[${app_number}].ver")
-app_id=$(echo "${response}" | jq -r ".list[${app_number}].id")
-
-if [ $download_location -eq 1 ]; then
-	url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=1&id=${app_id}"
-else
-	url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=2&id=${app_id}"
-fi
-
-outDir="/var/mobile/appFetch/"
-downloadApp "$url" "$outDir" "$app_name"
+download_app "$app_number"
