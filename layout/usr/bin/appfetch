@@ -1,7 +1,7 @@
 #!/bin/bash
 # AppFetch - Turann & Randy420
 
-ver="0.5"
+ver="0.6"
 
 print_message() {
 	for message in "$@"; do
@@ -21,6 +21,61 @@ check_invalid_appID() {
 
 search_app() {
 	app_name="${1}"
+	if [ "$download_location" -eq 4 ]; then
+		json_url="https://raw.githubusercontent.com/apptesters-org/Repo/main/apps.json"
+		response=$(curl -s "$json_url")
+		app_count=$(echo "${response}" | jq -r '.apps | length')
+
+		if [[ $app_count -eq 0 ]]; then
+			print_message "Application not found"
+			exit
+		fi
+
+		matched_apps=()
+		loading_indicator="Searching for applications"
+		spin_chars="/-\|"
+		spin_index=0
+
+		while [[ ${#matched_apps[@]} -eq 0 ]]; do
+			app_name=$(echo "$app_name" | tr '[:lower:]' '[:upper:]')
+			matched_apps=()
+			for (( i=0; i<app_count; i++ )); do
+			printf "\r%s %s " "$loading_indicator" "${spin_chars:$spin_index:1}"
+			spin_index=$(( (spin_index + 1) % 4 ))
+
+				name=$(echo "${response}" | jq -r ".apps[$i].name" | tr '[:upper:]' '[:lower:]')
+				if [[ $name == *"${app_name,,}"* ]]; then
+					matched_apps+=($i)
+				fi
+			done
+			sleep 0.2
+		done
+
+		if [[ ${#matched_apps[@]} -eq 0 ]]; then
+			print_message "No matching applications found"
+			exit
+		fi
+
+		for app_index in "${matched_apps[@]}"; do
+			app_name=$(echo "${response}" | jq -r ".apps[$app_index].name")
+			app_version=$(echo "${response}" | jq -r ".apps[$app_index].version")
+			app_id=$(echo "${response}" | jq -r ".apps[$app_index].bundleIdentifier")
+			download_url=$(echo "${response}" | jq -r ".apps[$app_index].downloadURL")
+
+			hyphens=$(printf '%*s' "$((${#app_name}+${#app_version}+2))" | tr ' ' '-')
+
+			print_message "\n\n\t-- App Number: $((app_index+1)) --"
+			print_message "Application name: ${app_name}"
+			print_message "Application Version: v${app_version}"
+			print_message "Application ID: ${app_id}"
+			#print_message "Download URL: ${download_url}"
+			print_message "$hyphens"
+		done
+		return
+	fi
+
+	app_count=0
+	response=""
 	if [ "$download_location" -eq 1 ]; then
 		url="https://apiv2.iphonecake.com/appcake/appcake_api/spv6/appsearch_r.php?device=1&q=${app_name}&p=0"
 	elif [ "$download_location" -eq 2 ]; then
@@ -29,7 +84,7 @@ search_app() {
 		read -p "		1) Troll Store Only
 		2) Non Troll Store
 		3) Both
-		" trollstore_option
+" trollstore_option
 		trollstore_param=""
 		if [[ $trollstore_option -eq 1 ]]; then
 			trollstore_param="&trollstore=YES"
@@ -39,39 +94,45 @@ search_app() {
 		url="https://api.cypwn.xyz/@ipas/search?name=${app_name}${trollstore_param}"
 	fi
 
-	response=$(curl -s -X GET -H "x-api-key: appfetch-d405-4859-a784-a82a6b5c9f75" "${url}")
+	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ] || [ "$download_location" -eq 3 ]; then
+		response=$(curl -s -X GET -H "x-api-key: appfetch-d405-4859-a784-a82a6b5c9f75" "${url}")
 
-	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
-		app_count=$(echo "${response}" | jq -r '.list | length')
-	else
-		app_count=$(echo "${response}" | jq -r '.total')
-	fi
-
-	if [[ $app_count -eq 0 ]]; then
-		print_message "Application not found"
-		exit
-	fi
-
-	for (( i=0; i<app_count; i++ )); do
 		if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
-			app_name=$(echo "${response}" | jq -r ".list[$i].name")
-			app_version=$(echo "${response}" | jq -r ".list[$i].ver")
-			app_id=$(echo "${response}" | jq -r ".list[$i].id")
+			app_count=$(echo "${response}" | jq -r '.list | length')
 		else
-			app_name=$(echo "${response}" | jq -r ".ipas[$i].name")
-			app_version=$(echo "${response}" | jq -r ".ipas[$i].version")
-			app_id=$(echo "${response}" | jq -r ".ipas[$i].id")
+			app_count=$(echo "${response}" | jq -r '.total')
 		fi
 
-		hyphens=$(printf '%*s' "$((${#app_name}+${#app_version}+2))" | tr ' ' '-')
+		if [[ $app_count -eq 0 ]]; then
+			print_message "Application not found"
+			exit
+		fi
 
-		print_message "\n\n\t-- App Number: $((i+1)) --"
-		print_message "Application name: ${app_name}"
-		print_message "Application Version: v${app_version}"
-		print_message "Application ID: ${app_id}"
-		print_message "$hyphens"
-	done
+		for (( i=0; i<app_count; i++ )); do
+			if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
+				app_name=$(echo "${response}" | jq -r ".list[$i].name")
+				app_version=$(echo "${response}" | jq -r ".list[$i].ver")
+				app_id=$(echo "${response}" | jq -r ".list[$i].id")
+			else
+				app_name=$(echo "${response}" | jq -r ".ipas[$i].name")
+				app_version=$(echo "${response}" | jq -r ".ipas[$i].version")
+				app_id=$(echo "${response}" | jq -r ".ipas[$i].id")
+			fi
+
+			hyphens=$(printf '%*s' "$((${#app_name}+${#app_version}+2))" | tr ' ' '-')
+
+			print_message "\n\n\t-- App Number: $((i+1)) --"
+			print_message "Application name: ${app_name}"
+			print_message "Application Version: v${app_version}"
+			print_message "Application ID: ${app_id}"
+			print_message "$hyphens"
+		done
+	else
+		print_message "Invalid download location"
+		exit
+	fi
 }
+
 download_app() {
 	app_number="${1}"
 	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
@@ -120,6 +181,26 @@ download_app() {
 		else
 			print_message "Failed to download ${app_name}"
 		fi
+	elif [ "$download_location" -eq 4 ]; then
+		app_name=$(echo "${response}" | jq -r ".apps[${app_number}].name")
+		download_url=$(echo "${response}" | jq -r ".apps[${app_number}].downloadURL")
+
+		outDir="/var/mobile/appFetch/"
+		if [[ ! -d ${outDir} ]]; then
+			mkdir -p ${outDir}
+		fi
+
+		print_message "Downloading ${app_name} from Custom JSON..."
+		wget --show-progress "${download_url}" -O "${outDir}${app_name}.ipa"
+
+		if [[ -f "${outDir}${app_name}.ipa" ]]; then
+			print_message "${app_name} successfully downloaded to ${outDir}"
+		else
+			print_message "Failed to download ${app_name}"
+		fi
+	else
+		print_message "Invalid download location"
+		exit
 	fi
 }
 
@@ -133,9 +214,11 @@ do
 	read -rp "Which type of IPA would you like to download?
 	1) iPhoneCake
 	2) ++ App
-	3) Other (Cypwn API)
+	3) Cypwn API
+	4) AppleTesters
 	" download_location
-	if [[ $download_location -lt 1 || $download_location -gt 3 ]]; then
+
+	if [[ $download_location -lt 1 || $download_location -gt 4 ]]; then
 		print_message "Invalid Selection!"
 		continue
 	fi
