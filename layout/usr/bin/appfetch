@@ -1,7 +1,7 @@
 #!/bin/bash
 # AppFetch - Turann & Randy420
 
-ver="0.0.4"
+ver="0.5"
 
 print_message() {
 	for message in "$@"; do
@@ -23,11 +23,29 @@ search_app() {
 	app_name="${1}"
 	if [ "$download_location" -eq 1 ]; then
 		url="https://apiv2.iphonecake.com/appcake/appcake_api/spv6/appsearch_r.php?device=1&q=${app_name}&p=0"
-	else
+	elif [ "$download_location" -eq 2 ]; then
 		url="https://api.ipahub.com/search_tweaks.php?key=${app_name}"
+	elif [ "$download_location" -eq 3 ]; then
+		read -p "		1) Troll Store Only
+		2) Non Troll Store
+		3) Both
+		" trollstore_option
+		trollstore_param=""
+		if [[ $trollstore_option -eq 1 ]]; then
+			trollstore_param="&trollstore=YES"
+		elif [[ $trollstore_option -eq 2 ]]; then
+			trollstore_param="&trollstore=NO"
+		fi
+		url="https://api.cypwn.xyz/@ipas/search?name=${app_name}${trollstore_param}"
 	fi
-	response=$(curl -s -X POST -H "${headers[@]}" -d "${payload}" "${url}")
-	app_count=$(echo "${response}" | jq -r '.list | length')
+
+	response=$(curl -s -X GET -H "x-api-key: appfetch-d405-4859-a784-a82a6b5c9f75" "${url}")
+
+	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
+		app_count=$(echo "${response}" | jq -r '.list | length')
+	else
+		app_count=$(echo "${response}" | jq -r '.total')
+	fi
 
 	if [[ $app_count -eq 0 ]]; then
 		print_message "Application not found"
@@ -35,11 +53,18 @@ search_app() {
 	fi
 
 	for (( i=0; i<app_count; i++ )); do
-		app_name=$(echo "${response}" | jq -r ".list[$i].name")
-		app_version=$(echo "${response}" | jq -r ".list[$i].ver")
-		app_id=$(echo "${response}" | jq -r ".list[$i].id")
+		if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
+			app_name=$(echo "${response}" | jq -r ".list[$i].name")
+			app_version=$(echo "${response}" | jq -r ".list[$i].ver")
+			app_id=$(echo "${response}" | jq -r ".list[$i].id")
+		else
+			app_name=$(echo "${response}" | jq -r ".ipas[$i].name")
+			app_version=$(echo "${response}" | jq -r ".ipas[$i].version")
+			app_id=$(echo "${response}" | jq -r ".ipas[$i].id")
+		fi
+
 		hyphens=$(printf '%*s' "$((${#app_name}+${#app_version}+2))" | tr ' ' '-')
-		
+
 		print_message "\n\n\t-- App Number: $((i+1)) --"
 		print_message "Application name: ${app_name}"
 		print_message "Application Version: v${app_version}"
@@ -47,34 +72,54 @@ search_app() {
 		print_message "$hyphens"
 	done
 }
-
 download_app() {
 	app_number="${1}"
-	app_name=$(echo "${response}" | jq -r ".list[${app_number}].name")
-	app_version=$(echo "${response}" | jq -r ".list[${app_number}].ver")
-	app_id=$(echo "${response}" | jq -r ".list[${app_number}].id")
+	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
+		if [ "$download_location" -eq 1 ]; then
+			app_name=$(echo "${response}" | jq -r ".list[${app_number}].name")
+			app_version=$(echo "${response}" | jq -r ".list[${app_number}].ver")
+			app_id=$(echo "${response}" | jq -r ".list[${app_number}].id")
+			url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=1&id=${app_id}"
+		elif [ "$download_location" -eq 2 ]; then
+			app_name=$(echo "${response}" | jq -r ".list[${app_number}].name")
+			app_version=$(echo "${response}" | jq -r ".list[${app_number}].ver")
+			app_id=$(echo "${response}" | jq -r ".list[${app_number}].id")
+			url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=2&id=${app_id}"
+		fi
 
-	if [ "$download_location" -eq 1 ]; then
-		url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=1&id=${app_id}"
-	else
-		url="https://apiv2.iphonecake.com/appcake/appcake_api/ipastore_ios_link.php?type=2&id=${app_id}"
-	fi
+		response=$(curl -s -X GET -H "${headers[@]}" -d "${payload}" "${url}")
+		download_lmk=$(echo "${response}" | jq -r '.link' | tr -d '"' | sed 's/^[[:space:]]*//')
+		outDir="/var/mobile/appFetch/"
 
-	response=$(curl -s -X GET -H "${headers[@]}" -d "${payload}" "${url}")
-	download_lmk=$(echo "${response}" | jq -r '.link' | tr -d '"' | sed 's/^[[:space:]]*//')
-	outDir="/var/mobile/appFetch/"
+		if [[ ! -d ${outDir} ]]; then
+			mkdir -p ${outDir}
+		fi
 
-	if [[ ! -d ${outDir} ]]; then
-		mkdir -p ${outDir}
-	fi
+		print_message "Downloading ${app_name}..."
+		wget --show-progress "${download_lmk}" -O "${outDir}${app_name}.ipa"
 
-	echo "$download_lmk"
-	wget --show-progress "${download_lmk}" -O "${outDir}${app_name}.ipa"
+		if [[ -f "${outDir}${app_name}.ipa" ]]; then
+			print_message "${app_name} successfully downloaded to ${outDir}"
+		else
+			print_message "Failed to download ${app_name}"
+		fi
+	elif [ "$download_location" -eq 3 ]; then
+		app_name=$(echo "${response}" | jq -r ".ipas[${app_number}].name")
+		download_url=$(echo "${response}" | jq -r ".ipas[${app_number}].download_url")
+		outDir="/var/mobile/appFetch/"
 
-	if [[ -f "${outDir}${app_name}.ipa" ]]; then
-		print_message "${app_name} successfully downloaded to ${outDir}"
-	else
-		echo "Failed to download ${app_name}"
+		if [[ ! -d ${outDir} ]]; then
+			mkdir -p ${outDir}
+		fi
+
+		print_message "Downloading ${app_name} from Cypwn API..."
+		wget --show-progress "${download_url}" -O "${outDir}${app_name}.ipa"
+
+		if [[ -f "${outDir}${app_name}.ipa" ]]; then
+			print_message "${app_name} successfully downloaded to ${outDir}"
+		else
+			print_message "Failed to download ${app_name}"
+		fi
 	fi
 }
 
@@ -88,8 +133,9 @@ do
 	read -rp "Which type of IPA would you like to download?
 	1) iPhoneCake
 	2) ++ App
+	3) Other (Cypwn API)
 	" download_location
-	if [[ $download_location -lt 1 || $download_location -gt 2 ]]; then
+	if [[ $download_location -lt 1 || $download_location -gt 3 ]]; then
 		print_message "Invalid Selection!"
 		continue
 	fi
