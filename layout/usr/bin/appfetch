@@ -1,12 +1,12 @@
 #!/bin/bash
 # AppFetch - Turann & Randy420
 
-ver="0.6"
+ver="0.7"
 
 print_message() {
 	for message in "$@"; do
 		echo -e "$message"
-		sleep 0.05
+		sleep 0.009
 	done
 }
 
@@ -21,7 +21,61 @@ check_invalid_appID() {
 
 search_app() {
 	app_name="${1}"
-	if [ "$download_location" -eq 4 ]; then
+	if [ "$download_location" -eq 5 ]; then
+		read -p "		Limit the amount of results
+		1) Yes
+		2) No
+		" limit_search
+
+		limit_param=""
+		if [[ $limit_search -eq 1 ]]; then
+			read -p "Number of results: " search_limit
+			limit_param="&limit=${search_limit}"
+		fi
+
+		url="https://api2.starfiles.co/files?public=true&search=${app_name}${limit_param}&group=hash&collapse=true&extension=ipa&sort=popular"
+		response=$(curl -s "$url")
+
+		app_count=$(echo "${response}" | jq -r 'length')
+
+		if [[ $app_count -eq 0 ]]; then
+			print_message "Application not found"
+			exit
+		fi
+
+		for ((i = 0; i < app_count; i++)); do
+			app_id=$(echo "${response}" | jq -r ".[$i].id")
+			app_name=$(echo "${response}" | jq -r ".[$i].name")
+			app_downloads=$(echo "${response}" | jq -r ".[$i].downloads")
+			app_views=$(echo "${response}" | jq -r ".[$i].views")
+
+			print_message "\n\n\t-- App Number: $((i + 1)) --"
+			print_message "Application name: ${app_name}"
+			print_message "Downloads: ${app_downloads}"
+			print_message "Views: ${app_views}"
+		done
+		return
+	fi
+
+	app_count=0
+	response=""
+	if [ "$download_location" -eq 1 ]; then
+		url="https://apiv2.iphonecake.com/appcake/appcake_api/spv6/appsearch_r.php?device=1&q=${app_name}&p=0"
+	elif [ "$download_location" -eq 2 ]; then
+		url="https://api.ipahub.com/search_tweaks.php?key=${app_name}"
+	elif [ "$download_location" -eq 3 ]; then
+		read -p "		1) Troll Store Only
+		2) Non Troll Store
+		3) Both
+		" trollstore_option
+		trollstore_param=""
+		if [[ $trollstore_option -eq 1 ]]; then
+			trollstore_param="&trollstore=YES"
+		elif [[ $trollstore_option -eq 2 ]]; then
+			trollstore_param="&trollstore=NO"
+		fi
+		url="https://api.cypwn.xyz/@ipas/search?name=${app_name}${trollstore_param}"
+	elif [ "$download_location" -eq 4 ]; then
 		json_url="https://raw.githubusercontent.com/apptesters-org/Repo/main/apps.json"
 		response=$(curl -s "$json_url")
 		app_count=$(echo "${response}" | jq -r '.apps | length')
@@ -40,8 +94,8 @@ search_app() {
 			app_name=$(echo "$app_name" | tr '[:lower:]' '[:upper:]')
 			matched_apps=()
 			for (( i=0; i<app_count; i++ )); do
-			printf "\r%s %s " "$loading_indicator" "${spin_chars:$spin_index:1}"
-			spin_index=$(( (spin_index + 1) % 4 ))
+				printf "\r%s %s " "$loading_indicator" "${spin_chars:$spin_index:1}"
+				spin_index=$(( (spin_index + 1) % 4 ))
 
 				name=$(echo "${response}" | jq -r ".apps[$i].name" | tr '[:upper:]' '[:lower:]')
 				if [[ $name == *"${app_name,,}"* ]]; then
@@ -61,37 +115,19 @@ search_app() {
 			app_version=$(echo "${response}" | jq -r ".apps[$app_index].version")
 			app_id=$(echo "${response}" | jq -r ".apps[$app_index].bundleIdentifier")
 			download_url=$(echo "${response}" | jq -r ".apps[$app_index].downloadURL")
+			app_description=$(echo "${response}" | jq -r ".apps[$app_index].localizedDescription")
 
 			hyphens=$(printf '%*s' "$((${#app_name}+${#app_version}+2))" | tr ' ' '-')
 
 			print_message "\n\n\t-- App Number: $((app_index+1)) --"
 			print_message "Application name: ${app_name}"
 			print_message "Application Version: v${app_version}"
+			print_message "Application Description: ${app_description}"
 			print_message "Application ID: ${app_id}"
 			#print_message "Download URL: ${download_url}"
 			print_message "$hyphens"
 		done
 		return
-	fi
-
-	app_count=0
-	response=""
-	if [ "$download_location" -eq 1 ]; then
-		url="https://apiv2.iphonecake.com/appcake/appcake_api/spv6/appsearch_r.php?device=1&q=${app_name}&p=0"
-	elif [ "$download_location" -eq 2 ]; then
-		url="https://api.ipahub.com/search_tweaks.php?key=${app_name}"
-	elif [ "$download_location" -eq 3 ]; then
-		read -p "		1) Troll Store Only
-		2) Non Troll Store
-		3) Both
-" trollstore_option
-		trollstore_param=""
-		if [[ $trollstore_option -eq 1 ]]; then
-			trollstore_param="&trollstore=YES"
-		elif [[ $trollstore_option -eq 2 ]]; then
-			trollstore_param="&trollstore=NO"
-		fi
-		url="https://api.cypwn.xyz/@ipas/search?name=${app_name}${trollstore_param}"
 	fi
 
 	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ] || [ "$download_location" -eq 3 ]; then
@@ -125,16 +161,36 @@ search_app() {
 			print_message "Application name: ${app_name}"
 			print_message "Application Version: v${app_version}"
 			print_message "Application ID: ${app_id}"
+			#print_message "Download URL: ${download_url}"
 			print_message "$hyphens"
 		done
-	else
-		print_message "Invalid download location"
-		exit
+		return
 	fi
 }
 
 download_app() {
 	app_number="${1}"
+	if [ "$download_location" -eq 5 ]; then
+		ids=$(echo "${response}" | jq -r ".[${app_number}].id")
+		app_name=$(echo "${response}" | jq -r ".[${app_number}].name")
+
+		download_link="https://download.starfiles.co/${ids}"
+
+		print_message "Downloading ${app_name} from StarFiles..."
+		outDir="/var/mobile/appFetch/"
+		if [[ ! -d ${outDir} ]]; then
+			mkdir -p ${outDir}
+		fi
+
+		wget --show-progress "${download_link}" -O "${outDir}${app_name}"
+
+		if [[ -f "${outDir}${app_name}" ]]; then
+			print_message "${app_name} successfully downloaded to ${outDir}"
+		else
+			print_message "Failed to download ${app_name}"
+		fi
+		return
+	fi
 	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ]; then
 		if [ "$download_location" -eq 1 ]; then
 			app_name=$(echo "${response}" | jq -r ".list[${app_number}].name")
@@ -215,10 +271,11 @@ do
 	1) iPhoneCake
 	2) ++ App
 	3) Cypwn API
-	4) AppleTesters
+	4) AppleTesters.org
+	5) StarFiles (Matches usually have HUNDREDS of results)
 	" download_location
 
-	if [[ $download_location -lt 1 || $download_location -gt 4 ]]; then
+	if [[ $download_location -lt 1 || $download_location -gt 5 ]]; then
 		print_message "Invalid Selection!"
 		continue
 	fi
