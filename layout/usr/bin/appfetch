@@ -1,13 +1,31 @@
 #!/bin/bash
 # AppFetch - Turann & Randy420
 
-ver="0.7"
+ver="0.8"
 
 print_message() {
 	for message in "$@"; do
 		echo -e "$message"
-		sleep 0.009
+		#sleep 0.009
 	done
+}
+
+print_help() {
+    echo ""
+    echo "AppFetch - Turann & Randy420"
+    echo ""
+    echo "Usage: appfetch [OPTIONS]"
+    echo "Options:"
+    echo "  -a, --app <name>     Specify the name of the app to search."
+    echo "  -r, --repo <1-5>     Specify the repository to search for the app."
+    echo "  -h, --help           Show this help message and exit."
+    echo ""
+    echo "Available Repositories:"
+    echo "  1) iPhoneCake"
+    echo "  2) ++ App"
+    echo "  3) Cypwn API"
+    echo "  4) AppleTesters.org"
+    echo "  5) StarFiles (Matches usually have HUNDREDS of results)"
 }
 
 check_invalid_appID() {
@@ -75,60 +93,37 @@ search_app() {
 			trollstore_param="&trollstore=NO"
 		fi
 		url="https://api.cypwn.xyz/@ipas/search?name=${app_name}${trollstore_param}"
-	elif [ "$download_location" -eq 4 ]; then
-		json_url="https://raw.githubusercontent.com/apptesters-org/Repo/main/apps.json"
-		response=$(curl -s "$json_url")
-		app_count=$(echo "${response}" | jq -r '.apps | length')
+    elif [ "$download_location" -eq 4 ]; then
+        json_url="https://api2.starfiles.co/repo_search?url=https://raw.githubusercontent.com/apptesters-org/Repo/main/apps.json&query=${app_name}"
+        response=$(curl -s "$json_url")
+        
+        app_count=$(echo "${response}" | jq -r '.apps | length')
 
-		if [[ $app_count -eq 0 ]]; then
-			print_message "Application not found"
-			exit
-		fi
+        if [[ $app_count -eq 0 ]]; then
+            print_message "Application not found"
+            exit
+        fi
 
-		matched_apps=()
-		loading_indicator="Searching for applications"
-		spin_chars="/-\|"
-		spin_index=0
+        for ((i = 0; i < app_count; i++)); do
+            app_name=$(echo "${response}" | jq -r ".apps[$i].name")
+            app_bundle_id=$(echo "${response}" | jq -r ".apps[$i].bundleID")
+            app_version=$(echo "${response}" | jq -r ".apps[$i].version")
+            app_version_date=$(echo "${response}" | jq -r ".apps[$i].versionDate")
+            app_full_date=$(echo "${response}" | jq -r ".apps[$i].fullDate")
+            app_size=$(echo "${response}" | jq -r ".apps[$i].size")
+            download_url=$(echo "${response}" | jq -r ".apps[$i].down")
 
-		while [[ ${#matched_apps[@]} -eq 0 ]]; do
-			app_name=$(echo "$app_name" | tr '[:lower:]' '[:upper:]')
-			matched_apps=()
-			for (( i=0; i<app_count; i++ )); do
-				printf "\r%s %s " "$loading_indicator" "${spin_chars:$spin_index:1}"
-				spin_index=$(( (spin_index + 1) % 4 ))
-
-				name=$(echo "${response}" | jq -r ".apps[$i].name" | tr '[:upper:]' '[:lower:]')
-				if [[ $name == *"${app_name,,}"* ]]; then
-					matched_apps+=($i)
-				fi
-			done
-			sleep 0.2
-		done
-
-		if [[ ${#matched_apps[@]} -eq 0 ]]; then
-			print_message "No matching applications found"
-			exit
-		fi
-
-		for app_index in "${matched_apps[@]}"; do
-			app_name=$(echo "${response}" | jq -r ".apps[$app_index].name")
-			app_version=$(echo "${response}" | jq -r ".apps[$app_index].version")
-			app_id=$(echo "${response}" | jq -r ".apps[$app_index].bundleIdentifier")
-			download_url=$(echo "${response}" | jq -r ".apps[$app_index].downloadURL")
-			app_description=$(echo "${response}" | jq -r ".apps[$app_index].localizedDescription")
-
-			hyphens=$(printf '%*s' "$((${#app_name}+${#app_version}+2))" | tr ' ' '-')
-
-			print_message "\n\n\t-- App Number: $((app_index+1)) --"
-			print_message "Application name: ${app_name}"
-			print_message "Application Version: v${app_version}"
-			print_message "Application Description: ${app_description}"
-			print_message "Application ID: ${app_id}"
-			#print_message "Download URL: ${download_url}"
-			print_message "$hyphens"
-		done
-		return
-	fi
+            print_message "\n\n\t-- App Number: $((i + 1)) --"
+            print_message "Application name: ${app_name}"
+            print_message "Bundle ID: ${app_bundle_id}"
+            print_message "Version: ${app_version}"
+            print_message "Version Date: ${app_version_date}"
+#            print_message "Full Date: ${app_full_date}"
+            print_message "Size: ${app_size}"
+#            print_message "Download URL: ${download_url}"
+        done
+        return
+    fi
 
 	if [ "$download_location" -eq 1 ] || [ "$download_location" -eq 2 ] || [ "$download_location" -eq 3 ]; then
 		response=$(curl -s -X GET -H "x-api-key: appfetch-d405-4859-a784-a82a6b5c9f75" "${url}")
@@ -260,14 +255,45 @@ download_app() {
 	fi
 }
 
-clear
-print_message "AppFetch $ver"
+app_fetch_main() {
+	clear
+	print_message "AppFetch $ver"
 
-read -rp "Enter the name of the app to search: " app_name
+	app_name=""
+	download_location=""
 
-while :
-do
-	read -rp "Which type of IPA would you like to download?
+	# Check for command line arguments
+	while [[ $# -gt 0 ]]; do
+		key="$1"
+
+		case $key in
+			-h|--help)
+				print_help
+				exit
+				;;
+			-a|--app)
+				app_name="$2"
+				shift
+				;;
+			-r|--repo)
+				download_location="$2"
+				shift
+				;;
+			*)
+				print_message "Invalid argument: $key"
+				exit 1
+				;;
+		esac
+		shift
+	done
+
+	if [[ -z "$app_name" && -z "$download_location" ]]; then
+		read -rp "
+Enter the name of the app to search: " app_name
+
+		while :
+		do
+		read -rp "	Which type of IPA would you like to download?
 	1) iPhoneCake
 	2) ++ App
 	3) Cypwn API
@@ -275,40 +301,65 @@ do
 	5) StarFiles (Matches usually have HUNDREDS of results)
 	" download_location
 
-	if [[ $download_location -lt 1 || $download_location -gt 5 ]]; then
-		print_message "Invalid Selection!"
-		continue
+			if [[ $download_location -lt 1 || $download_location -gt 5 ]]; then
+				print_message "Invalid Selection!"
+				continue
+			fi
+			break
+		done
+	elif [[ -z "$app_name" ]]; then
+		read -rp "
+Enter the name of the app to search: " app_name
+	elif [[ -z "$download_location" ]]; then
+		while :
+		do
+			read -rp "Which type of IPA would you like to download?
+			1) iPhoneCake
+			2) ++ App
+			3) Cypwn API
+			4) AppleTesters.org
+			5) StarFiles (Matches usually have HUNDREDS of results)
+			" download_location
+
+			if [[ $download_location -lt 1 || $download_location -gt 5 ]]; then
+				print_message "Invalid Selection!"
+				continue
+			fi
+			break
+		done
 	fi
-	break
-done
 
-payload=""
-headers=(
-	"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
-	"User-Agent: appcakej/7.2.2 (iPhone; iOS 14.8; Scale/3.00)"
-	"Connection: close"
-	"Host: ${HOST}"
-	"Accept-Encoding: gzip, deflate"
-	"Cache-Control: max-age=0"
-)
+	payload=""
+	headers=(
+		"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9"
+		"User-Agent: appcakej/7.2.2 (iPhone; iOS 14.8; Scale/3.00)"
+		"Connection: close"
+		"Host: api.iphonecake.com"
+		"Accept-Encoding: gzip, deflate"
+		"Cache-Control: max-age=0"
+	)
 
-search_app "$app_name"
+	search_app "$app_name"
 
-while :
-do
-	read -p "Enter the number of the app you want to download: " app_number
+	while :
+	do
+		read -p "
+Enter the number of the app you want to download: " app_number
 
-	if ! [[ "$app_number" =~ ^[0-9]+$ ]]; then
-		print_message "Invalid input. Please enter a number."
-		continue
-	fi
+		if ! [[ "$app_number" =~ ^[0-9]+$ ]]; then
+			print_message "Invalid input. Please enter a number."
+			continue
+		fi
 
-	if [ "$app_number" -lt 1 ] || [ "$app_number" -gt "$app_count" ]; then
-		print_message "Invalid input. Please enter a number between 1 and $app_count."
-		continue
-	fi
-	break
-done
+		if [ "$app_number" -lt 1 ] || [ "$app_number" -gt "$app_count" ]; then
+			print_message "Invalid input. Please enter a number between 1 and $app_count."
+			continue
+		fi
+		break
+	done
 
-app_number=$((app_number-1))
-download_app "$app_number"
+	app_number=$((app_number-1))
+	download_app "$app_number"
+}
+
+app_fetch_main "$@"
